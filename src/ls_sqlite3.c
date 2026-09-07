@@ -386,6 +386,43 @@ static int conn_escape(lua_State *L)
   return 1;
 }
 
+/*
+** Load an SQLite3 extension library at runtime.
+** Optional second argument is the entry point name; when omitted the
+** default entry point ("sqlite3_extension_init") is used.
+*/
+static int conn_load_extension(lua_State *L)
+{
+  char *errmsg = NULL;
+  conn_data *conn = getconnection(L);
+  const char *file = luaL_checkstring(L, 2);
+  const char *proc = luaL_optstring(L, 3, NULL);
+  int res;
+
+  if (conn->closed)
+  {
+    lua_pushboolean(L, 0);
+    lua_pushstring(L, "Connection is already closed");
+    return 2;
+  }
+
+  luaL_argcheck(L, file != NULL, 2, LUASQL_PREFIX"extension path expected");
+
+  res = sqlite3_load_extension(conn->sql_conn, file, proc, &errmsg);
+
+  if (res != SQLITE_OK)
+  {
+    lua_pushnil(L);
+    lua_pushliteral(L, LUASQL_PREFIX);
+    lua_pushstring(L, errmsg ? errmsg : "could not load extension");
+    if (errmsg) sqlite3_free(errmsg);
+    lua_concat(L, 2);
+    return 2;
+  }
+  lua_pushboolean(L, 1);
+  return 1;
+}
+
 
 /*
 ** Bind one parameter.
@@ -879,6 +916,7 @@ static void create_metatables (lua_State *L)
     {"__close", conn_gc},
     {"close", conn_close},
     {"escape", conn_escape},
+    {"load_extension", conn_load_extension},
 //    {"prepare", conn_prepare},
     {"execute", conn_execute},
     {"commit", conn_commit},
